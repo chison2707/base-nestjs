@@ -43,6 +43,7 @@ export class ApiResponse {
         httpStatus === HttpStatus.OK || httpStatus === HttpStatus.CREATED,
       [ApiResponseKey.MESSAGE]: message,
       [ApiResponseKey.TIMESTAMP]: this.getTimestamp(),
+      [ApiResponseKey.CODE]: httpStatus,
     };
   }
 }
