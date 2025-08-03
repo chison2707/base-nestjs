@@ -1,22 +1,53 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthRequest } from './dto/auth.request.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { UserWithoutPassword } from '../User/user.interface';
-import { loginResponse } from './auth.interface';
+import { IJwtPayload, loginResponse } from './auth.interface';
+import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prima: PrismaService) {}
+  constructor(
+    private readonly prima: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-  async login(request: AuthRequest): Promise<unknown> {
-    const user = await this.validateUser(request.email, request.password);
-    if (!user) {
-      throw new UnauthorizedException('Email hoac mật khẩu không đúng');
+  async login(request: AuthRequest): Promise<loginResponse> {
+    try {
+      const user = await this.validateUser(request.email, request.password);
+      if (!user) {
+        throw new UnauthorizedException('Email hoac mật khẩu không đúng');
+      }
+
+      const payload = { sub: user.id.toString() };
+
+      const acccessToken = await this.jwtService.signAsync(payload);
+      const refreshToken = randomBytes(32).toString('hex');
+      const crsfToken = randomBytes(32).toString('hex');
+
+      return this.authResponse(acccessToken, crsfToken);
+    } catch (error) {
+      throw new InternalServerErrorException(error);
     }
+  }
 
-    return 'Login successful';
+  authResponse(acccessToken: string, crsfToken: string): loginResponse {
+    const decoded = this.jwtService.decode<IJwtPayload>(acccessToken);
+    const expiresAt = decoded.exp - Math.floor(Date.now() / 1000);
+
+    return {
+      accessToken: acccessToken,
+      expiresAt: expiresAt,
+      tokenType: 'Bearer',
+      crsfToken: crsfToken,
+    };
   }
 
   async validateUser(
